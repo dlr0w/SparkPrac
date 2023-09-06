@@ -1,4 +1,6 @@
 package mini.examples;
+import static org.apache.spark.sql.functions.*;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.util.ArrayList;
@@ -6,13 +8,19 @@ import java.util.Arrays;
 import java.util.Scanner;
 import java.util.regex.Pattern;
 
+import org.apache.spark.SparkContext;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.MapFunction;
+import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.util.LongAccumulator;
 
-public class AccumelatorErrorCount {
+import scala.Tuple2;
+
+public class LookupCountry {
 
 	//callsignテーブルを読み込むメソッド
 	static String[] loadCallSignTable() throws FileNotFoundException {
@@ -90,6 +98,32 @@ public class AccumelatorErrorCount {
         } else {
             System.out.println("Too many errors: " + invalidSignCount.value() + " in " + validSignCount.value());
         }
+
+        //コールサインテーブルを読み込む
+        //contactCounts内の各コールサインを読み込む
+        //下記例ではうまくいかなかった。
+        //Broadcast<String[]> signPrefixes = spark.sparkContext().broadcast(loadCallSignTable());
+
+        //sparksesionでbroadcastを使用するためにsparkcontextを呼び出し
+        SparkContext sc = spark.sparkContext();
+        //ScalaとJava間に存在する違いを適切に処理するため、JavaSparkContextでラップする。
+        JavaSparkContext jsc = new JavaSparkContext(sc);
+        Broadcast<String[]> signPrefixes = jsc.broadcast(loadCallSignTable());
+
+
+        Dataset<Row> countryContactCounts = contactCounts.map(new MapFunction<Row, Tuple2<String, Integer>>() {
+            @Override
+            public Tuple2<String, Integer> call(Row row) throws Exception {
+                String sign = row.getAs("value");
+                String country = lookupCountry(sign, signPrefixes.value());
+                Integer count = row.getAs("count");
+                return new Tuple2<>(country, count);
+            }
+        }, Encoders.tuple(Encoders.STRING(), Encoders.INT()))
+        .groupBy("_1").agg(sum("_2").as("count"));
+
+
+
 
 
         spark.close();
