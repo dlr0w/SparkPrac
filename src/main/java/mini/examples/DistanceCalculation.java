@@ -199,7 +199,7 @@
 //		String distScriptName = "finddistance.R";
 //		sc.addFile(distScript);
 //
-//		// contactsContactListsはDataset<Row>であり、CallLog配列を保持する"value"列を持っていると仮定します。
+//
 //		Dataset<CallLog[]> contactLogsDS = contactsContactLists.map((MapFunction<Row, CallLog[]>) row -> (CallLog[]) row.get(1), Encoders.bean(CallLog[].class));
 //
 //		Dataset<String> pipeInputs = contactLogsDS.flatMap((FlatMapFunction<CallLog[], String>) calls -> {
