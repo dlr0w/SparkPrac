@@ -33,6 +33,7 @@ public class LookupCountry {
 	  }
 
 	static String lookupCountry(String callSign, String[] table) {
+		//binaryserchを使用する前に事前にソートしておく必要がある。
 	      Integer pos = java.util.Arrays.binarySearch(table, callSign);
 	      if (pos < 0) {
 	        pos = -pos-1;
@@ -40,15 +41,18 @@ public class LookupCountry {
 	      return table[pos].split(",")[1];
 	  }
 
-    public static void main(String[] args) throws FileNotFoundException {
+    public static void main(String[] args) throws Exception {
 
 
-        String sparkMaster = args[0];
-        String inputFile = args[1];
-        String outputDir = args[2];
+
+
+        String inputFile = "./files/callsigns";
+        String inputFile2 ="./files/callsigns";
+        String outputDir = "C:\\\\Users\\\\sekai\\\\Downloads\\\\spark_output2";
 
         SparkSession spark = SparkSession.builder()
                 .appName("ChapterSixExampleDataset")
+                .master("local[*]")
                 .getOrCreate();
 
         Dataset<String> file = spark.read().textFile(inputFile);
@@ -72,7 +76,7 @@ public class LookupCountry {
             return Arrays.asList(line.split(" ")).iterator();
         }, Encoders.STRING());
 
-        callSigns.write().text(outputDir + "/callsigns");
+        callSigns.write().text("C:\\\\Users\\\\sekai\\\\Downloads\\\\spark_output3" + "/callsigns");
         System.out.println("Blank lines: " + blankLines.value());
 
         // Validate call signs
@@ -94,7 +98,7 @@ public class LookupCountry {
         contactCounts.count();
 
         if (invalidSignCount.value() < 0.1 * validSignCount.value()) {
-            contactCounts.write().text(outputDir + "/contactCount");
+            contactCounts.javaRDD().saveAsTextFile(outputDir + "/contactCount");
         } else {
             System.out.println("Too many errors: " + invalidSignCount.value() + " in " + validSignCount.value());
         }
@@ -111,18 +115,18 @@ public class LookupCountry {
         Broadcast<String[]> signPrefixes = jsc.broadcast(loadCallSignTable());
 
 
-        Dataset<Row> countryContactCounts = contactCounts.map(new MapFunction<Row, Tuple2<String, Integer>>() {
+        Dataset<Row> countryContactCounts = contactCounts.map(new MapFunction<Row, Tuple2<String, Long>>() {
             @Override
-            public Tuple2<String, Integer> call(Row row) throws Exception {
+            public Tuple2<String, Long> call(Row row) throws Exception {
                 String sign = row.getAs("value");
                 String country = lookupCountry(sign, signPrefixes.value());
-                Integer count = row.getAs("count");
+                Long count = row.getAs("count");
                 return new Tuple2<>(country, count);
             }
-        }, Encoders.tuple(Encoders.STRING(), Encoders.INT()))
+        }, Encoders.tuple(Encoders.STRING(), Encoders.LONG()))
         .groupBy("_1").agg(sum("_2").as("count"));
 
-
+        countryContactCounts.javaRDD().saveAsTextFile("C:\\\\Users\\\\sekai\\\\Downloads\\\\spark_output4" + "/countries.txt");
 
 
 
